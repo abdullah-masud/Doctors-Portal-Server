@@ -17,6 +17,7 @@ async function run() {
     try {
         await client.connect();
         const serviceCollection = client.db('doctors_portal').collection('services');
+        const bookingCollection = client.db('doctors_portal').collection('bookings');
 
         // GET services from mongodb
         app.get('/services', async (req, res) => {
@@ -24,6 +25,36 @@ async function run() {
             const cursor = serviceCollection.find(query);
             const services = await cursor.toArray();
             res.send(services)
+        })
+
+        app.get('/available', async (req, res) => {
+            const date = req.query.date || 'May 16, 2022';
+
+            // step 1: get all services
+            const services = await serviceCollection.find().toArray();
+            // step 2: get the booking of that day
+            const query = { date: date };
+            const bookings = await bookingCollection.find(query).toArray();
+            // step 3: for each service, find bookings for that service
+            services.forEach(service => {
+                const serviceBookings = bookings.filter(b => b.treatmentName === service.name)
+                const booked = serviceBookings.map(s => s.slot);
+                const available = service.slots.filter(s => !booked.includes(s));
+                service.available = available;
+            })
+            res.send(services)
+        })
+
+        // POST booking into mongodb
+        app.post('/bookings', async (req, res) => {
+            const booking = req.body;
+            const query = { treatmentName: booking.treatmentName, date: booking.date, patientName: booking.patientName };
+            const exists = await bookingCollection.findOne(query);
+            if (exists) {
+                return res.send({ success: false, booking: exists });
+            }
+            const result = await bookingCollection.insertOne(booking);
+            return res.send({ success: true, result });
         })
     }
     finally {
