@@ -42,10 +42,18 @@ async function run() {
                 const bookedSlots = serviceBookings.map(book => book.slot);
                 // step 6: select those slots that are not in bookedSlots
                 const available = service.slots.filter(slot => !bookedSlots.includes(slot));
-                // step 7: set available to slots to make it easier
+                // step 7: set available to slots to make it easier 
                 service.slots = available;
             })
             res.send(services)
+        })
+
+        // GET bookings from db
+        app.get('/bookings', async (req, res) => {
+            const patientEmail = req.query.patientEmail;
+            const query = { patientEmail: patientEmail };
+            const bookings = await bookingCollection.find(query).toArray();
+            res.send(bookings);
         })
 
         // POST booking into mongodb
