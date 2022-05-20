@@ -4,6 +4,9 @@ const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 require('dotenv').config();
 
+var nodemailer = require('nodemailer');
+var sgTransport = require('nodemailer-sendgrid-transport');
+
 const app = express()
 const port = process.env.PORT || 5000;
 
@@ -26,6 +29,45 @@ function verifyJWT(req, res, next) {
         }
         req.decoded = decoded;
         next();
+    });
+}
+
+const emailSenderOptions = {
+    auth: {
+        api_key: process.env.EMAIL_SENDER_KEY
+    }
+}
+
+var emailClient = nodemailer.createTransport(sgTransport(emailSenderOptions));
+
+function sendAppointmentEmail(booking) {
+    const { patientName, patientEmail, treatmentName, date, slot } = booking
+
+    var email = {
+        from: process.env.EMAIL_SENDER,
+        to: patientEmail,
+        subject: `Your Appointment for ${treatmentName} is on ${date} at ${slot} is Confirmed`,
+        text: `Your Appointment for ${treatmentName} is on ${date} at ${slot} is Confirmed`,
+        html: `
+            <div>
+                <p>Hello, ${patientName}, </p>
+                <h3>Your Appointment for ${treatmentName}is Confirmed</h3>
+                <p>Looking forward to seeing you on ${date} at ${slot}</p>
+                <h3>Our Address</h3>
+                <p>Chittagong</p>
+                <p>Bangladesh</p>
+                <a href="https://www.programming-hero.com/">Unsubscribe</a>
+            </div>
+        `
+    };
+
+    emailClient.sendMail(email, function (err, info) {
+        if (err) {
+            console.log(err);
+        }
+        else {
+            console.log('Message sent: ', info);
+        }
     });
 }
 
@@ -101,6 +143,8 @@ async function run() {
                 return res.send({ success: false, booking: exists });
             }
             const result = await bookingCollection.insertOne(booking);
+            console.log('sending email')
+            sendAppointmentEmail(booking)
             return res.send({ success: true, result });
         })
 
@@ -147,6 +191,20 @@ async function run() {
         app.post('/doctor', verifyJWT, verifyAdmin, async (req, res) => {
             const doctor = req.body;
             const result = await doctorCollection.insertOne(doctor)
+            res.send(result);
+        })
+
+        // GET doctor from db
+        app.get('/doctor', verifyJWT, verifyAdmin, async (req, res) => {
+            const doctors = await doctorCollection.find().toArray();
+            res.send(doctors)
+        })
+
+        // Delete doctor into db
+        app.delete('/doctor/:email', verifyJWT, verifyAdmin, async (req, res) => {
+            const email = req.params.email;
+            const filter = { email: email }
+            const result = await doctorCollection.deleteOne(filter)
             res.send(result);
         })
     }
