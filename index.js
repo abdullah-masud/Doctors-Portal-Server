@@ -73,6 +73,38 @@ function sendAppointmentEmail(booking) {
     });
 }
 
+// Payment confirmation E-mail
+function sendPaymentConfirmationEmail(booking) {
+    const { patientName, patientEmail, treatmentName, date, slot } = booking
+
+    var email = {
+        from: process.env.EMAIL_SENDER,
+        to: patientEmail,
+        subject: `We have received your payment for ${treatmentName} on ${date} at ${slot}`,
+        text: `Your Payment for this ${treatmentName} is on ${date} at ${slot} is Confirmed`,
+        html: `
+            <div>
+                <p>Hello, ${patientName}, </p>
+                <h3>Thank you for the payment</h3>
+                <h3>We have received your payment</h3>
+                <h3>Our Address</h3>
+                <p>Chittagong</p>
+                <p>Bangladesh</p>
+                <a href="https://www.programming-hero.com/">Unsubscribe</a>
+            </div>
+        `
+    };
+
+    emailClient.sendMail(email, function (err, info) {
+        if (err) {
+            console.log(err);
+        }
+        else {
+            console.log('Message sent: ', info);
+        }
+    });
+}
+
 async function run() {
     try {
         await client.connect();
@@ -172,7 +204,7 @@ async function run() {
             }
             const result = await paymentCollection.insertOne(payment);
             const updatedBooking = await bookingCollection.updateOne(filter, updatedDoc);
-            res.send(updatedDoc)
+            res.send(updatedBooking)
 
         })
 
