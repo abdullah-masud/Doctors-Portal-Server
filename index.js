@@ -7,6 +7,8 @@ require('dotenv').config();
 var nodemailer = require('nodemailer');
 var sgTransport = require('nodemailer-sendgrid-transport');
 
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 const app = express()
 const port = process.env.PORT || 5000;
 
@@ -78,6 +80,7 @@ async function run() {
         const bookingCollection = client.db('doctors_portal').collection('bookings');
         const userCollection = client.db('doctors_portal').collection('users');
         const doctorCollection = client.db('doctors_portal').collection('doctors');
+        const paymentCollection = client.db('doctors_portal').collection('payments');
 
         const verifyAdmin = async (req, res, next) => {
             const requester = req.decoded.email;
@@ -156,6 +159,23 @@ async function run() {
             return res.send({ success: true, result });
         })
 
+        // PATCH bookings data after payment complete
+        app.patch('/bookings/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const payment = req.body
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId,
+                }
+            }
+            const result = await paymentCollection.insertOne(payment);
+            const updatedBooking = await bookingCollection.updateOne(filter, updatedDoc);
+            res.send(updatedDoc)
+
+        })
+
         // Check wheter the user is admin or not
         app.get('/admin/:email', async (req, res) => {
             const email = req.params.email;
@@ -214,6 +234,19 @@ async function run() {
             const filter = { email: email }
             const result = await doctorCollection.deleteOne(filter)
             res.send(result);
+        })
+
+        // stripe POST Api
+        app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+            const service = req.body;
+            const price = service.price;
+            const amount = price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+            res.send({ clientSecret: paymentIntent.client_secret })
         })
     }
     finally {
